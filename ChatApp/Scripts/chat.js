@@ -1,6 +1,139 @@
 var currentUserKey;
 var chatKey;
 
+
+document.addEventListener('keydown', function (key) {
+    if (key.which === 13) {
+        sendMessage();
+    }
+});
+
+function changeSendIcon(control) {
+    if (control.value !== '') {
+        document.getElementById('send').removeAttribute('style');
+        document.getElementById('send').setAttribute('style' , 'color : rgb(122, 235, 122);');
+        document.getElementById('audio').setAttribute('style', 'display:none');
+    }
+    else {
+        document.getElementById('audio').removeAttribute('style');
+        document.getElementById('audio').setAttribute('style' , 'color : rgb(122, 235, 122);');
+        document.getElementById('send').setAttribute('style', 'display:none');
+    }
+}
+
+let chunks = [];
+let recorder;
+var timeout;
+
+function record(control) {
+    const device = navigator.mediaDevices.getUserMedia({ audio: true });
+    device.then(stream => {
+        if (recorder === undefined) {
+            recorder = new MediaRecorder(stream);
+            recorder.ondataavailable = e => {
+                chunks.push(e.data);
+
+                if (recorder.state === 'inactive') {
+                    let blob = new Blob(chunks, { type: 'audio/webm' });
+                    //document.getElementById('audio').innerHTML = '<source src="' + URL.createObjectURL(blob) + '" type="video/webm" />'; //;
+                    var reader = new FileReader();
+
+                    reader.addEventListener("load", function () {
+                        var chatMessage = {
+                            userId: currentUserKey,
+                            msg: reader.result,
+                            msgType: 'audio',
+                            dateTime: new Date().toLocaleString()
+                        };
+
+                        firebase.database().ref('chatMessage').child(chatKey).push(chatMessage, function (error) {
+                            if (error) alert(error);
+                            else {
+
+                                document.getElementById('txtMessage').value = '';
+                                document.getElementById('txtMessage').focus();
+                            }
+                        });
+                    }, false);
+
+                    reader.readAsDataURL(blob);
+                }
+            }
+
+            recorder.start();
+            control.setAttribute('class', 'fas fa-stop fa-2x');
+            document.getElementById('audio').setAttribute('style','color:red');        
+        }
+    });
+
+    if (recorder !== undefined) {
+        if (control.getAttribute('class').indexOf('stop') !== -1) {
+            recorder.stop();
+            control.setAttribute('class', 'fas fa-microphone fa-2x');
+            control.setAttribute('style','color : rgb(122, 235, 122);');
+        }
+        else {
+            chunks = [];
+            recorder.start();
+            control.setAttribute('class', 'fas fa-stop fa-2x');
+            document.getElementById('audio').setAttribute('style','color:red');
+        }
+    }
+}
+
+
+function smile() {
+    var a;
+    a = document.getElementById("smileys");
+    a.innerHTML = "&#xf118;";
+    setTimeout(function () {
+        a.innerHTML = "&#xf11a;";
+      }, 1000);
+    setTimeout(function () {
+        a.innerHTML = "&#xf119;";
+      }, 2000);
+    setTimeout(function () {
+        a.innerHTML = "&#xf11a;";
+      }, 3000);
+  }
+  smile();
+  setInterval(smile, 4000);
+
+function showEmoji() {
+    document.getElementById('emoji').removeAttribute('style');
+}
+
+function hideEmoji() {
+    document.getElementById('emoji').setAttribute('style', 'display:none;');
+}
+
+function getEmoji(control) {
+    document.getElementById('txtMessage').value += control.innerHTML;
+}
+
+loadAllEmoji();
+function loadAllEmoji() {
+    var emoji = '';
+    for (var i = 128512; i <= 128567; i++) {
+        emoji += `<a href="#" onclick="getEmoji(this)">&#${i};</a>`
+    }
+    document.getElementById('smiley').innerHTML = emoji;
+
+    var shape = ''
+    for (var i = 128070; i <= 128080; i++) {
+        shape += `<a href="#" onclick="getEmoji(this)">&#${i};</a>`
+    }
+
+    for (var i = 128112; i <= 128120; i++) {
+        shape += `<a href="#" onclick="getEmoji(this)">&#${i};</a>`
+    }
+
+    for (var i = 129304; i <= 129311; i++) {
+        shape += `<a href="#" onclick="getEmoji(this)">&#${i};</a>`
+    }
+    document.getElementById('shape').innerHTML = shape;
+}
+
 function startChat(key, name, image) {
     var friend_list = { friendId: key, userId: currentUserKey };
     var db = firebase.database().ref('friendList');
@@ -32,23 +165,31 @@ function startChat(key, name, image) {
         document.getElementById('friendName').innerHTML = name;
         document.getElementById('messages').innerHTML = '';
 
-        onKeyDown();
         document.getElementById('txtMessage').value = '';
         document.getElementById('txtMessage').focus();
-        LoadChatMessages(chatKey,image);
+        LoadChatMessages(chatKey, image);
     });
-    // console.log(chatKey);
-
 }
 
-function LoadChatMessages(chatKey , image) {
+function LoadChatMessages(chatKey, image) {
     var db = firebase.database().ref('chatMessage').child(chatKey);
     db.on('value', function (chats) {
         var messageDisplay = '';
         chats.forEach(function (data) {
             var chat = data.val();
             var datetime = chat.dateTime.split(',');
+            var msg = '';
+            if (chat.msgType === 'image') {
+                msg = `<img src='${chat.msg}' class="img-fluid"/>`;
+            }
+            else if(chat.msgType === 'audio'){
+                msg = `<audio src='${chat.msg}' style="width:200px;" controls></audio>`;
+            }
+            else {
+                msg = chat.msg;
+            }
 
+            
 
             if (chat.userId !== currentUserKey) {
                 messageDisplay += ` <div class="row">
@@ -56,7 +197,7 @@ function LoadChatMessages(chatKey , image) {
                                 <img src="${image}" alt="" class="chat-pic rounded-circle">
                             </div>
                             <div class="col-7 col-sm-7 col-md-7">
-                                <p class="receive">${chat.msg}
+                                <p class="receive">${msg}
                                 <span class="time" title="${datetime[0]}">${datetime[1]}</span>
                                     
                                 </p>
@@ -66,8 +207,8 @@ function LoadChatMessages(chatKey , image) {
             else {
                 messageDisplay += `<div class="row justify-content-end">
                 <div class="col-7 col-sm-7 col-md-7">
-                    <p class="sent float-right" >
-                    ${chat.msg}
+                    <p class="sent float-right">
+                    ${msg}
                     <span class="time" title="${datetime[0]}">${datetime[1]}</span> 
                     </p>
                 </div>
@@ -77,8 +218,12 @@ function LoadChatMessages(chatKey , image) {
             </div>`;
             }
         });
+
+        document.getElementById('txtMessage').value = '';
+        document.getElementById('txtMessage').focus();
+
         document.getElementById('messages').innerHTML = messageDisplay;
-    document.getElementById('messages').scrollTo(0, document.getElementById('messages').scrollHeight);
+        document.getElementById('messages').scrollTo(0, document.getElementById('messages').scrollHeight);
 
 
     });
@@ -101,42 +246,54 @@ function sendMessage() {
     var chatMessage = {
         userId: currentUserKey,
         msg: document.getElementById('txtMessage').value,
+        msgType : 'txt',
         dateTime: new Date().toLocaleString()
     };
 
     firebase.database().ref('chatMessage').child(chatKey).push(chatMessage, function (error) {
         if (error) alert(error);
         else {
-            //     var message = `<div class="row justify-content-end">
-            //     <div class="col-7 col-sm-7 col-md-7">
-            //         <p class="sent float-right" >
-            //         ${document.getElementById('txtMessage').value}
-            //         <span class="time">1:pm</span>
-            //         </p>
-            //     </div>
-            //     <div class="col-2 col-sm-1 col-md-1">
-            //         <img  src="${user_data.photoURL}" alt="" class="chat-pic rounded-circle">
-            //     </div>
-            // </div>`;
-            //     console.log(message);
-            //     document.getElementById('messages').innerHTML += message;
             document.getElementById('txtMessage').value = '';
             document.getElementById('txtMessage').focus();
-            //  document.getElementById('messages').scrollTo(0, document.getElementById('messages').clientHeight);
 
         }
     });
 }
 
-function onKeyDown() {
-    document.addEventListener('keydown', function (key) {
-        if (key.which == 13) {
-            sendMessage();
-        }
-    });
+function chooseImages() {
+    document.getElementById('imageFile').click();
 }
 
+function sendImage(event) {
+    var file = event.files[0];
 
+    if (!file.type.match("image.*")) {
+        alert("Please Select Images..")
+    }
+    else {
+        var reader = new FileReader();
+        reader.addEventListener("load", function () {
+            var chatMessage = {
+                userId: currentUserKey,
+                msg: reader.result,
+                msgType : 'image',
+                dateTime: new Date().toLocaleString()
+            };
+
+            firebase.database().ref('chatMessage').child(chatKey).push(chatMessage, function (error) {
+                if (error) alert(error);
+                else {
+                    document.getElementById('txtMessage').value = '';
+                    document.getElementById('txtMessage').focus();
+                }
+            });
+        }, false);
+
+        if (file) {
+            reader.readAsDataURL(file);
+        }
+    }
+}
 
 
 function signIn() {
@@ -265,12 +422,12 @@ function loadChatlist() {
                     var user = data.val();
                     document.getElementById('listChat').innerHTML += `<li class="list-group-item list-group-item-action" onclick="startChat('${data.key}','${user.name}','${user.photoURL}')">
                 <div class="row">
-                    <div class="col-md-2">
+                    <div class="col-1 col-sm-1 col-md-2">
                         <img src="${user.photoURL}" alt="" class="friend-pic rounded-circle">
                     </div>
-                    <div class="col-md-10" style="cursor: pointer;">
-                        <div class="name">${user.name}</div>
-                        <div class="recentChat">Recent Chat</div>
+                    <div class=" col-8 col-sm-9 col-md-10 pl-5 " style="cursor: pointer;">
+                        <span class="name">${user.name}</span>
+                        
                     </div>
                 </div>
             </li>`;
@@ -279,3 +436,9 @@ function loadChatlist() {
         });
     });
 }
+
+// $(document).ready(function(){
+//     $("#txtMessage").emojioneArea({
+//         // saveEmojisAs: "shortname"
+//     });
+// });
